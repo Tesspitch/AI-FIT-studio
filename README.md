@@ -1,6 +1,6 @@
-# AI Fit Studio
+# Office Reset
 
-เว็บฝึกออกกำลังกายที่ตรวจตำแหน่งร่างกายในเบราว์เซอร์ ใช้ React, Vite, TypeScript, Tailwind CSS, MediaPipe Tasks Vision และ Supabase
+เว็บบริหารร่างกายและยืดเหยียดระหว่างวันสำหรับคนทำงานหน้าคอม พร้อมตรวจตำแหน่งร่างกายในเบราว์เซอร์ ใช้ React, Vite, TypeScript, Tailwind CSS, MediaPipe Tasks Vision และ Supabase
 
 ## เริ่มใช้งาน
 

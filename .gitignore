@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env*
+!.env.example
+.env.local
+
+prompt.md
+requirement.md
+ai-fitness-mvp-specification.md
