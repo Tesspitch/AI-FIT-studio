@@ -1,10 +1,11 @@
 import { isAuthError, type Session, type User } from '@supabase/supabase-js'
-import { CalendarDays, LogIn, LogOut, Pencil, UserRound, UserRoundPlus } from 'lucide-react'
+import { CalendarDays, ChevronRight, Dumbbell, LogIn, LogOut, Pencil, UserRound, UserRoundPlus } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/ui/button'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { isGoogleSignInEnabled, supabase } from '../../lib/supabase'
+import { buildHistoryRows, exerciseName, type HistorySession } from '../workout/history-rows'
 
 function accountReturnUrl() {
   return new URL('/', window.location.origin).href
@@ -392,18 +393,6 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
   </div>
 }
 
-type HistorySession = {
-  id: string
-  started_at: string
-  total_reps: number
-  overall_score: number | null
-  workout_exercises: {
-    id: string
-    exercises: { name: string } | { name: string }[] | null
-    rep_evaluations: { rep_number: number; form_score: number; feedback: unknown }[]
-  }[]
-}
-
 const dateFormat = new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
 function feedbackMessages(value: unknown): string[] {
@@ -416,7 +405,8 @@ export function History({ user }: { user: User | null }) {
   const [params] = useSearchParams()
   return <>
     <div className="page-heading"><h1>ประวัติการฝึก</h1><p>ดูผลการฝึกที่ผ่านมาและรายละเอียดแต่ละครั้ง</p></div>
-    {user && supabase ? <HistoryResults key={user.id} userId={user.id} selectedId={params.get('session')} /> :
+    {user && supabase ? <HistoryResults key={user.id} userId={user.id}
+      selectedExerciseId={params.get('exercise')} selectedId={params.get('session')} /> :
       <section className="panel status-panel narrow">
         <span className="tile"><CalendarDays size={22} /></span>
         <h2>ประวัติของคุณ</h2>
@@ -426,14 +416,19 @@ export function History({ user }: { user: User | null }) {
   </>
 }
 
-function HistoryResults({ userId, selectedId }: { userId: string; selectedId: string | null }) {
+function HistoryResults({ userId, selectedExerciseId, selectedId }: {
+  userId: string
+  selectedExerciseId: string | null
+  selectedId: string | null
+}) {
   const [sessions, setSessions] = useState<HistorySession[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   useEffect(() => {
     const controller = new AbortController()
     void supabase!.from('workout_sessions')
-      .select('id, started_at, total_reps, overall_score, workout_exercises(id, exercises(name), rep_evaluations(rep_number, form_score, feedback))')
-      .eq('user_id', userId).order('started_at', { ascending: false }).abortSignal(controller.signal).then(({ data, error }) => {
+      .select('id, started_at, total_reps, overall_score, workout_exercises(id, exercise_id, total_reps, exercises(name), rep_evaluations(rep_number, form_score, feedback))')
+      .eq('user_id', userId).order('started_at', { ascending: false }).order('id', { ascending: false })
+      .abortSignal(controller.signal).then(({ data, error }) => {
         if (controller.signal.aborted) return
         if (error) setStatus('error')
         else {
@@ -444,31 +439,53 @@ function HistoryResults({ userId, selectedId }: { userId: string; selectedId: st
     return () => controller.abort()
   }, [userId])
 
-  const selected = sessions.find(({ id }) => id === selectedId)
   if (status !== 'ready') return <p className="panel status-panel" role="status">
     {status === 'loading' ? 'กำลังโหลดประวัติ' : 'โหลดประวัติไม่สำเร็จ กรุณาลองเปิดหน้าใหม่'}
   </p>
-  if (selected) return <section className="panel status-panel">
+
+  const rows = buildHistoryRows(sessions)
+  const visibleRows = selectedExerciseId ? rows.filter(({ exerciseId }) => exerciseId === selectedExerciseId) : rows
+  const selectedRow = selectedId ? visibleRows.find(({ session }) => session.id === selectedId) : undefined
+  const selected = selectedExerciseId ? selectedRow?.session : sessions.find(({ id }) => id === selectedId)
+  if (selectedId && !selected) return <section className="panel status-panel">
     <Link className="text-link" to="/history">กลับไปที่ประวัติ</Link>
-    <h2>{dateFormat.format(new Date(selected.started_at))}</h2>
-    <p>จำนวน {selected.total_reps} ครั้ง · คะแนนรวม {selected.overall_score ?? 'N/A'}</p>
-    {selected.workout_exercises.map((entry) => <div key={entry.id}>
-      <h3>{(Array.isArray(entry.exercises) ? entry.exercises[0] : entry.exercises)?.name ?? 'ท่าออกกำลังกาย'}</h3>
-      <ol className="rep-list">
-        {entry.rep_evaluations.slice().sort((a, b) => a.rep_number - b.rep_number).map((rep) => <li key={rep.rep_number}>
-          <strong>ครั้งที่ {rep.rep_number} · {rep.form_score} คะแนน</strong>
-          {feedbackMessages(rep.feedback).map((message, index) => <p key={index}>{message}</p>)}
-        </li>)}
-      </ol>
-    </div>)}
+    <h2>ไม่พบผลการฝึก</h2>
   </section>
+
+  if (selected) {
+    const entries = selected.workout_exercises.filter((entry) => !selectedExerciseId || entry.exercise_id === selectedExerciseId)
+    const dateLabel = dateFormat.format(new Date(selected.started_at))
+    return <section className="panel status-panel">
+      <Link className="text-link" to="/history">กลับไปที่ประวัติ</Link>
+      <h2 tabIndex={-1} data-quick-tip-target="history-result">{selectedExerciseId ? selectedRow?.name : dateLabel}</h2>
+      {selectedExerciseId && <p><time dateTime={selected.started_at}>{dateLabel}</time></p>}
+      <p>{selectedExerciseId ? selectedRow?.reps : selected.total_reps} รอบ · คะแนนรวมการฝึก {selected.overall_score ?? 'N/A'}</p>
+      {entries.map((entry) => <div key={entry.id}>
+        {!selectedExerciseId && <h3>{exerciseName(entry)}</h3>}
+        {entry.rep_evaluations.length === 0 ? <p>ไม่มีรอบที่ประเมินได้ในครั้งนี้</p> : <ol className="rep-list">
+          {entry.rep_evaluations.slice().sort((a, b) => a.rep_number - b.rep_number).map((rep) => <li key={rep.rep_number}>
+            <strong>ครั้งที่ {rep.rep_number} · {rep.form_score} คะแนน</strong>
+            {feedbackMessages(rep.feedback).map((message, index) => <p key={index}>{message}</p>)}
+          </li>)}
+        </ol>}
+      </div>)}
+    </section>
+  }
+
   return <section className="panel status-panel">
-    <h2>{selectedId ? 'ไม่พบผลการฝึก' : sessions.length ? 'รายการที่บันทึกไว้' : 'ยังไม่มีประวัติการฝึก'}</h2>
-    {sessions.length > 0 && <ul className="exercise-list">
-      {sessions.map((session) => <li key={session.id}>
-        <Link to={`?session=${encodeURIComponent(session.id)}`}><CalendarDays size={19} />
-          <span>{dateFormat.format(new Date(session.started_at))}</span>
-          <span>{session.total_reps} ครั้ง · {session.overall_score ?? 'N/A'}</span>
+    {selectedExerciseId && <Link className="text-link" to="/history">ดูรายการฝึกทั้งหมด</Link>}
+    <h2 tabIndex={visibleRows.length ? undefined : -1} data-quick-tip-target={visibleRows.length ? undefined : 'history-empty'}>
+      {visibleRows.length ? 'รายการฝึกที่ผ่านมา' : 'ยังไม่มีประวัติการฝึก'}
+    </h2>
+    {visibleRows.length > 0 && <ul className="exercise-list history-list">
+      {visibleRows.map(({ exerciseId, name, reps, session }, index) => <li key={`${session.id}/${exerciseId}`}>
+        <Link to={`/history?${new URLSearchParams({ exercise: exerciseId, session: session.id })}`}
+          data-quick-tip-target={index === 0 ? 'choose-history' : undefined}>
+          <Dumbbell size={19} aria-hidden="true" />
+          <span><strong>{name}</strong>
+            <small><time dateTime={session.started_at}>{dateFormat.format(new Date(session.started_at))}</time>
+              {' · '}{reps} รอบ · คะแนนรวม {session.overall_score ?? 'N/A'}</small></span>
+          <ChevronRight size={17} aria-hidden="true" />
         </Link>
       </li>)}
     </ul>}

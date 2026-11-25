@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { assessPose, type PoseQuality } from './quality'
 import { createPoseRuntime, drawPose } from './runtime'
 
@@ -14,15 +15,22 @@ function cameraError(error: unknown) {
   }
 }
 
-export function useCamera() {
+type PoseListener = (result: PoseLandmarkerResult | null, timestamp: number) => void
+
+export function useCamera(onPose?: PoseListener) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const poseListener = useRef(onPose)
   const [enabled, setEnabled] = useState(false)
   const [deviceId, setDeviceId] = useState('')
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [quality, setQuality] = useState<PoseQuality>('missing')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    poseListener.current = onPose
+  }, [onPose])
 
   useEffect(() => {
     const video = videoRef.current
@@ -47,6 +55,7 @@ export function useCamera() {
       if (!current) return
       current = false
       release()
+      poseListener.current?.(null, performance.now())
       setError(message)
       setStatus('error')
       setEnabled(false)
@@ -57,9 +66,11 @@ export function useCamera() {
         lastFrame = video.currentTime
         lastRun = timestamp
         try {
-          const points = runtime.detector.detectForVideo(video, timestamp).landmarks[0] ?? []
+          const result = runtime.detector.detectForVideo(video, timestamp)
+          const points = result.landmarks[0] ?? []
           drawPose(canvas, video, points, runtime.connections)
           setQuality(assessPose(points))
+          poseListener.current?.(result, timestamp)
         } catch {
           fail('ระบบตรวจจับท่าทางหยุดทำงาน กรุณาลองเปิดกล้องใหม่')
           return
@@ -124,9 +135,13 @@ export function useCamera() {
 
   return {
     videoRef, canvasRef, devices, deviceId, status, quality, error, enabled,
-    selectDevice: setDeviceId,
+    selectDevice: (id: string) => {
+      poseListener.current?.(null, performance.now())
+      setDeviceId(id)
+    },
     start: () => setEnabled(true),
     stop: () => {
+      poseListener.current?.(null, performance.now())
       setEnabled(false)
       setStatus('idle')
       setError('')

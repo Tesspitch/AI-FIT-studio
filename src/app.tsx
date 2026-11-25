@@ -1,5 +1,5 @@
 import {
-  CalendarDays, Camera, ChevronRight, ClipboardList,
+  CalendarDays, Camera, ChevronRight, CircleHelp, ClipboardList,
   Droplets, Dumbbell, Focus, House, PanelLeftClose, PanelLeftOpen, ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -7,7 +7,9 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from '
 import { Button } from './components/ui/button'
 import { useExercises } from './features/exercises/use-exercises'
 import { Account, AccountAvatar, History, SignIn, SignOutButton, useAccount, useProfile } from './features/account/account'
+import { QuickTips, useQuickTips } from './features/onboarding/quick-tips'
 import { Studio } from './features/pose/studio'
+import { shoulderRaiseDemo } from './features/pose/shoulder-raise'
 import { WorkoutOverview } from './features/workout/workout-overview'
 import { referenceVideoUrl, supabase } from './lib/supabase'
 import hero from './assets/studio-hero.png'
@@ -80,6 +82,7 @@ function Workspace({ pathname, user }: { pathname: string; user: NonNullable<Ret
   const pageLabel = (pathname === '/profile' ? 'โปรไฟล์' : pages.find(({ path }) => path === pathname)?.label) ?? 'รายละเอียดท่า'
   const catalog = useExercises()
   const profileState = useProfile(user.id)
+  const tips = useQuickTips(user.id, pathname)
   const displayName = profileState.profile?.display_name?.trim()
   const toggleLabel = sidebarCollapsed ? 'ขยายแถบด้านข้าง' : 'ย่อแถบด้านข้าง'
 
@@ -121,7 +124,7 @@ function Workspace({ pathname, user }: { pathname: string; user: NonNullable<Ret
       <main key={pathname} className={pathname.replace(/\/$/, '') === '/studio'
         ? 'main-content route-enter studio-content' : 'main-content route-enter'}>
         <Routes>
-          <Route path="/" element={<Dashboard catalog={catalog} userId={user.id} />} />
+          <Route path="/" element={<Dashboard catalog={catalog} userId={user.id} onShowTips={tips.open} />} />
           <Route path="/studio" element={<Studio catalog={catalog} />} />
           <Route path="/exercise/:id" element={<ExercisePage catalog={catalog} />} />
           <Route path="/history" element={<History user={user} />} />
@@ -130,14 +133,22 @@ function Workspace({ pathname, user }: { pathname: string; user: NonNullable<Ret
         </Routes>
       </main>
     </div>
+    {tips.visible && <QuickTips hidePermanently={tips.hidePermanently} onDismiss={tips.dismiss} />}
   </div>
 }
 
-function Dashboard({ catalog, userId }: { catalog: ReturnType<typeof useExercises>; userId: string }) {
+function Dashboard({ catalog, userId, onShowTips }: {
+  catalog: ReturnType<typeof useExercises>
+  userId: string
+  onShowTips: () => void
+}) {
   return <>
-    <div className="page-heading">
-      <h1>ภาพรวมการฝึก</h1>
-      <p>พักจากหน้าคอมและติดตามการบริหารร่างกายของคุณ</p>
+    <div className="page-heading dashboard-heading">
+      <div>
+        <h1>ภาพรวมการฝึก</h1>
+        <p>พักจากหน้าคอมและติดตามการบริหารร่างกายของคุณ</p>
+      </div>
+      <Button variant="outline" onClick={onShowTips}><CircleHelp size={17} aria-hidden="true" />วิธีใช้งาน</Button>
     </div>
     <section className="hero" aria-labelledby="hero-title">
       <img src={hero} alt="" className="hero-art" fetchPriority="high" />
@@ -145,7 +156,7 @@ function Dashboard({ catalog, userId }: { catalog: ReturnType<typeof useExercise
         <h2 id="hero-title">พักจากโต๊ะ<br className="hero-break" /> แล้วขยับร่างกาย</h2>
         <p>ยืดเหยียดในช่วงพักและดูท่าทางของตัวเอง<br className="hero-break" /> ผ่านกล้องระหว่างฝึก</p>
         <Button asChild>
-          <Link to="/studio"><Camera size={18} strokeWidth={2} />เปิดห้องฝึก</Link>
+          <Link to="/studio" data-quick-tip-target="open-studio"><Camera size={18} strokeWidth={2} />เปิดห้องฝึก</Link>
         </Button>
       </div>
     </section>
@@ -162,15 +173,19 @@ function Dashboard({ catalog, userId }: { catalog: ReturnType<typeof useExercise
       </section>
       <section className="panel catalog-panel">
         <h2>รายการท่า</h2>
-        {catalog.exercises.length ? <ul className="exercise-list">
+        <ul className="exercise-list">
+          <li>
+            <Link to={`/studio?exercise=${shoulderRaiseDemo.id}`}>
+              <Dumbbell size={17} aria-hidden="true" />{shoulderRaiseDemo.name} (ทดลอง)<ChevronRight size={16} aria-hidden="true" />
+            </Link>
+          </li>
           {catalog.exercises.map((exercise) => <li key={exercise.id}>
             <Link to={`/exercise/${exercise.id}`}><Dumbbell size={17} />{exercise.name}<ChevronRight size={16} /></Link>
           </li>)}
-        </ul> : <div className="catalog-empty" aria-live="polite">
+        </ul>
+        {catalog.status === 'error' && <div className="catalog-empty" role="status">
           <span className="empty-illustration"><ClipboardList size={34} strokeWidth={1.6} /></span>
-          <strong>{catalog.status === 'loading' ? 'กำลังโหลดรายการท่า' : catalog.status === 'error' ? 'โหลดรายการท่าไม่สำเร็จ' : 'รายการท่าอยู่ระหว่างเตรียม'}</strong>
-          <p>{catalog.status === 'error' ? 'ลองเปิดหน้านี้ใหม่อีกครั้ง' : 'ระหว่างนี้ลองเปิดกล้องเพื่อจัดตำแหน่งได้'}</p>
-          <Button variant="outline" asChild><Link to="/studio">ไปที่ห้องฝึก</Link></Button>
+          <strong>โหลดรายการท่าเพิ่มเติมไม่สำเร็จ</strong>
         </div>}
       </section>
     </div>
