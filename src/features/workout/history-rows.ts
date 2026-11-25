@@ -12,7 +12,33 @@ export type HistorySession = {
   }[]
 }
 
-type HistoryRow = { exerciseId: string; name: string; reps: number; session: HistorySession }
+type HistoryRow = { exerciseId: string; exerciseLabel: string; name: string; reps: number; session: HistorySession }
+
+export const historySortOptions = [
+  { value: 'recent', label: 'ล่าสุดก่อน' },
+  { value: 'oldest', label: 'เก่าสุดก่อน' },
+  { value: 'score-high', label: 'คะแนนสูงสุดก่อน' },
+  { value: 'score-low', label: 'คะแนนต่ำสุดก่อน' },
+] as const
+
+export type HistorySort = typeof historySortOptions[number]['value']
+
+export function parseHistorySort(value: string | null): HistorySort {
+  return historySortOptions.find((option) => option.value === value)?.value ?? 'recent'
+}
+
+export function orderHistoryRows(rows: HistoryRow[], sort: HistorySort) {
+  if (sort === 'recent') return rows
+  if (sort === 'oldest') return rows.slice().reverse()
+  const direction = sort === 'score-high' ? -1 : 1
+  return rows.slice().sort((a, b) => {
+    const aScore = a.session.overall_score
+    const bScore = b.session.overall_score
+    if (aScore === null) return bScore === null ? 0 : 1
+    if (bScore === null) return -1
+    return (aScore - bScore) * direction
+  })
+}
 
 const dayFormat = new Intl.DateTimeFormat('en-CA', { dateStyle: 'short' })
 
@@ -29,12 +55,14 @@ export function buildHistoryRows(newestFirst: HistorySession[]) {
     for (const entry of session.workout_exercises) {
       const previous = sessionRows.get(entry.exercise_id)
       const reps = (previous?.reps ?? 0) + entry.total_reps
+      const name = exerciseName(entry)
       sessionRows.set(entry.exercise_id, {
-        exerciseId: entry.exercise_id, name: exerciseName(entry), reps, session,
+        exerciseId: entry.exercise_id, exerciseLabel: name, name, reps, session,
       })
     }
     if (sessionRows.size === 0) sessionRows.set('unspecified', {
-      exerciseId: 'unspecified', name: 'การฝึกที่ไม่ระบุท่า', reps: session.total_reps, session,
+      exerciseId: 'unspecified', exerciseLabel: 'การฝึกที่ไม่ระบุท่า',
+      name: 'การฝึกที่ไม่ระบุท่า', reps: session.total_reps, session,
     })
 
     const day = dayFormat.format(new Date(session.started_at))

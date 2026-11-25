@@ -1,9 +1,10 @@
-import { ArrowLeft, Camera, ChevronDown, ChevronRight, Clapperboard, Dumbbell, Focus, ScanLine, ShieldCheck, VideoOff } from 'lucide-react'
+import { Camera, ChevronDown, ChevronRight, Clapperboard, Dumbbell, Focus, ScanLine, ShieldCheck, VideoOff } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import shoulderRaiseClip from '../../assets/shoulder-raise-demo.mp4'
 import { Button } from '../../components/ui/button'
+import { BackButton } from '../../components/ui/back-button'
 import { referenceVideoUrl } from '../../lib/supabase'
 import type { Exercise, useExercises } from '../exercises/use-exercises'
 import { saveDemoWorkout, type CompletedDemoWorkout, type DemoWorkout } from '../workout/save-demo-workout'
@@ -173,13 +174,9 @@ function StudioWorkout({ catalog, exercise, isDemo }: {
     workoutStatus.phase === 'saving' || workoutStatus.phase === 'failed'
 
   return <>
-    <div className="studio-heading">
-      <Button className="studio-back-button" variant="outline" disabled={exerciseLocked} onClick={() => navigate('/studio')}>
-        <ArrowLeft size={17} aria-hidden="true" />
-      </Button>
-      <div className="page-heading">
-        <h1>ห้องฝึก</h1>
-      </div>
+    <div className="page-heading back-heading studio-heading">
+      <BackButton label="กลับไปเลือกท่า" disabled={exerciseLocked} onClick={() => navigate('/studio')} />
+      <h1>ห้องฝึก</h1>
     </div>
     <div className="studio-grid">
       <section className="panel camera-panel studio-reference-panel" aria-labelledby="reference-title">

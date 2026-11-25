@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHistoryRows, type HistorySession } from './history-rows'
+import { buildHistoryRows, orderHistoryRows, parseHistorySort, type HistorySession } from './history-rows'
 
 function session(id: string, day: number, hour: number, ...exerciseIds: string[]): HistorySession {
   return {
@@ -40,5 +40,22 @@ describe('exercise history rows', () => {
     expect(rows.map(({ name }) => name)).toContain('หมุนไหล่')
     expect(rows.map(({ name }) => name)).toContain('การฝึกที่ไม่ระบุท่า')
     expect(rows).toHaveLength(3)
+  })
+
+  it('sorts scores in either direction and keeps unrated workouts at the end', () => {
+    const rows = buildHistoryRows([
+      session('unrated', 25, 18, 'ยกแขน'),
+      { ...session('new-high', 25, 17, 'ยกแขน'), overall_score: 90 },
+      { ...session('zero', 25, 15, 'ยกแขน'), overall_score: 0 },
+      { ...session('old-high', 25, 8, 'ยกแขน'), overall_score: 90 },
+    ])
+    expect(orderHistoryRows(rows, 'score-high').map(({ session }) => session.id))
+      .toEqual(['new-high', 'old-high', 'zero', 'unrated'])
+    expect(orderHistoryRows(rows, 'score-low').map(({ session }) => session.id))
+      .toEqual(['zero', 'new-high', 'old-high', 'unrated'])
+    expect(orderHistoryRows(rows, 'oldest').map(({ session }) => session.id))
+      .toEqual(['old-high', 'zero', 'new-high', 'unrated'])
+    expect(rows[0]).toMatchObject({ exerciseLabel: 'ยกแขน', name: 'ยกแขน-4' })
+    expect(parseHistorySort('unknown')).toBe('recent')
   })
 })

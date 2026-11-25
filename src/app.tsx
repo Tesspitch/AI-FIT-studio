@@ -5,6 +5,7 @@ import {
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { Button } from './components/ui/button'
+import { BackButton } from './components/ui/back-button'
 import { useExercises } from './features/exercises/use-exercises'
 import { Account, AccountAvatar, History, SignIn, SignOutButton, useAccount, useProfile } from './features/account/account'
 import { QuickTips, useQuickTips } from './features/onboarding/quick-tips'
@@ -144,11 +145,11 @@ function Dashboard({ catalog, userId, onShowTips }: {
 }) {
   return <>
     <div className="page-heading dashboard-heading">
-      <div>
-        <h1>ภาพรวมการฝึก</h1>
-        <p>พักจากหน้าคอมและติดตามการบริหารร่างกายของคุณ</p>
-      </div>
-      <Button variant="outline" onClick={onShowTips}><CircleHelp size={17} aria-hidden="true" />วิธีใช้งาน</Button>
+      <h1>ภาพรวมการฝึก</h1>
+      <p>พักจากหน้าคอมและติดตามการบริหารร่างกายของคุณ</p>
+      <Button className="dashboard-help" variant="ghost" onClick={onShowTips}>
+        <CircleHelp size={15} aria-hidden="true" />วิธีใช้งาน
+      </Button>
     </div>
     <section className="hero" aria-labelledby="hero-title">
       <img src={hero} alt="" className="hero-art" fetchPriority="high" />
@@ -195,13 +196,16 @@ function Dashboard({ catalog, userId, onShowTips }: {
 function ExercisePage({ catalog }: { catalog: ReturnType<typeof useExercises> }) {
   const { id } = useParams()
   const exercise = catalog.exercises.find((item) => item.id === id)
-  if (!exercise) return <div className="panel status-panel">
+  if (!exercise) return <div className="page-heading back-heading">
+    <BackButton to="/" label="กลับไปที่ภาพรวม" />
     <h1>{catalog.status === 'loading' ? 'กำลังโหลดท่า' : 'ไม่พบข้อมูลท่า'}</h1>
-    <Button variant="outline" asChild><Link to="/">กลับไปที่ภาพรวม</Link></Button>
   </div>
   const video = referenceVideoUrl(exercise.reference_video_key)
   return <>
-    <div className="page-heading"><h1>{exercise.name}</h1>{exercise.description && <p>{exercise.description}</p>}</div>
+    <div className="page-heading back-heading">
+      <BackButton to="/" label="กลับไปที่ภาพรวม" />
+      <div><h1>{exercise.name}</h1>{exercise.description && <p>{exercise.description}</p>}</div>
+    </div>
     <section className="panel status-panel">
       <h2>คลิปตัวอย่าง</h2>
       {video ? <video className="reference-video" controls playsInline preload="metadata" src={video} />
