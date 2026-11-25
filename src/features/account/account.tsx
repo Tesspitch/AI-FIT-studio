@@ -3,6 +3,7 @@ import { CalendarDays, LogIn, LogOut, Pencil, UserRound, UserRoundPlus } from 'l
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '../../components/ui/button'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { isGoogleSignInEnabled, supabase } from '../../lib/supabase'
 
 function accountReturnUrl() {
@@ -67,11 +68,12 @@ export function Account({ user, profileState }: { user: User; profileState: Retu
 }
 
 export function SignOutButton({ className }: { className: string }) {
+  const [confirming, setConfirming] = useState(false)
   const [pending, setPending] = useState(false)
   const [failed, setFailed] = useState(false)
 
   async function signOut() {
-    if (pending || !supabase) return
+    if (!confirming || pending || !supabase) return
     setPending(true)
     setFailed(false)
     try {
@@ -85,12 +87,19 @@ export function SignOutButton({ className }: { className: string }) {
   }
 
   return <div className={className}>
-    {failed && <p className="notice notice-error sign-out-feedback" role="alert">ออกจากระบบไม่สำเร็จ กรุณาลองอีกครั้ง</p>}
-    <Button variant="ghost" disabled={pending} aria-busy={pending} aria-label="ออกจากระบบ"
-      title="ออกจากระบบ" onClick={() => void signOut()}>
+    <Button variant="ghost" aria-label="ออกจากระบบ"
+      title="ออกจากระบบ" onClick={() => {
+        setFailed(false)
+        setConfirming(true)
+      }}>
       <LogOut size={17} aria-hidden="true" />
-      <span className="sign-out-label">{pending ? 'กำลังออกจากระบบ' : 'ออกจากระบบ'}</span>
+      <span className="sign-out-label">ออกจากระบบ</span>
     </Button>
+    {confirming && <ConfirmDialog title="ออกจากระบบหรือไม่?"
+      description="คุณจะกลับไปหน้าล็อกอิน และต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งาน"
+      confirmLabel="ยืนยันการออกจากระบบ" pendingLabel="กำลังออกจากระบบ" pending={pending}
+      error={failed ? 'ออกจากระบบไม่สำเร็จ กรุณาลองอีกครั้ง' : undefined}
+      onCancel={() => setConfirming(false)} onConfirm={() => void signOut()} />}
   </div>
 }
 
@@ -253,6 +262,8 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
   const [editing, setEditing] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [draftToSave, setDraftToSave] = useState<ProfileFields | null>(null)
+  const [saveFailed, setSaveFailed] = useState(false)
   const editingStarted = useRef(false)
   const editButton = useRef<HTMLButtonElement>(null)
   const nameInput = useRef<HTMLInputElement>(null)
@@ -266,26 +277,32 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
     }
   }, [editing])
 
-  async function save(event: FormEvent<HTMLFormElement>) {
+  function requestSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy) return
+    if (busy || draftToSave) return
     const data = new FormData(event.currentTarget)
     const text = (key: string) => String(data.get(key) ?? '').trim() || null
     const number = (key: string) => text(key) === null ? null : Number(text(key))
+    setDraftToSave({
+      display_name: text('display_name'), age: number('age'),
+      height_cm: number('height_cm'), weight_kg: number('weight_kg'), experience_level: text('experience_level'),
+    })
+    setSaveFailed(false)
+  }
+
+  async function save() {
+    if (!draftToSave || busy || !supabase) return
     setBusy(true)
-    setMessage('')
+    setSaveFailed(false)
     try {
-      const updatedProfile: ProfileFields = {
-        display_name: text('display_name'), age: number('age'),
-        height_cm: number('height_cm'), weight_kg: number('weight_kg'), experience_level: text('experience_level'),
-      }
-      const { error } = await supabase!.from('profiles').upsert({ id: user.id, ...updatedProfile })
+      const { error } = await supabase.from('profiles').upsert({ id: user.id, ...draftToSave })
       if (error) throw error
-      setProfile(updatedProfile)
+      setProfile(draftToSave)
+      setDraftToSave(null)
       setEditing(false)
       setMessage('บันทึกโปรไฟล์แล้ว')
     } catch {
-      setMessage('บันทึกโปรไฟล์ไม่สำเร็จ กรุณาลองอีกครั้ง')
+      setSaveFailed(true)
     } finally {
       setBusy(false)
     }
@@ -328,7 +345,7 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
           </div>)}
         </dl>
       </section>}
-      {profile && editing && <form className="account-form profile-form" onSubmit={save}>
+      {profile && editing && <form className="account-form profile-form" onSubmit={requestSave}>
         <fieldset disabled={busy}>
           <legend>ข้อมูลส่วนตัว</legend>
           <p className="profile-hint">ทุกช่องเว้นว่างได้ และกลับมาแก้ไขภายหลังได้</p>
@@ -367,6 +384,11 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
       {message && <p className="notice" role="status">{message}</p>}
     </section>
     {!editing && <SignOutButton className="profile-account-actions" />}
+    {draftToSave && <ConfirmDialog title="บันทึกโปรไฟล์หรือไม่?"
+      description="ยืนยันเพื่อบันทึกข้อมูลโปรไฟล์ที่แก้ไขไว้"
+      confirmLabel="ยืนยันการบันทึก" pendingLabel="กำลังบันทึก" pending={busy}
+      error={saveFailed ? 'บันทึกโปรไฟล์ไม่สำเร็จ กรุณาลองอีกครั้ง' : undefined}
+      onCancel={() => setDraftToSave(null)} onConfirm={() => void save()} />}
   </div>
 }
 

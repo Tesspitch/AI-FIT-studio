@@ -12,7 +12,7 @@ import { WorkoutOverview } from './features/workout/workout-overview'
 import { referenceVideoUrl, supabase } from './lib/supabase'
 import hero from './assets/studio-hero.png'
 import signInArt from './assets/sign-in-studio.png'
-import officeResetLogo from './assets/office-reset-logo.png'
+import officeResetLogo from './assets/office-reset-logo-stretch.png'
 
 const pages = [
   { path: '/', label: 'ภาพรวม', icon: House },
@@ -54,8 +54,8 @@ function SignInPage({ loading }: { loading: boolean }) {
     <main className="auth-layout">
       <section className="auth-intro" aria-labelledby="auth-intro-title">
         <div className="auth-intro-copy">
-          <h2 id="auth-intro-title">พักจากโต๊ะ แล้วขยับร่างกาย</h2>
-          <p>บริหารร่างกายและยืดเหยียดสำหรับคนทำงานหน้าคอม พร้อมดูท่าทางผ่านกล้องระหว่างฝึก</p>
+          <h2 id="auth-intro-title">พักจากโต๊ะสักนิด</h2>
+          <p>ยืดเหยียดระหว่างวันสำหรับคนทำงานหน้าคอม พร้อมดูท่าทางของตัวเองผ่านกล้อง</p>
         </div>
         <img src={signInArt} alt="" fetchPriority="high" />
         <div className="auth-privacy"><ShieldCheck size={17} aria-hidden="true" />ภาพจากกล้องประมวลผลบนอุปกรณ์ของคุณ</div>

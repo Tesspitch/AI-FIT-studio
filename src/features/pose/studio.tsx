@@ -45,7 +45,7 @@ export function Studio({ catalog }: { catalog: ReturnType<typeof useExercises> }
       </label>}
     </div>
     <div className="studio-grid">
-      <section className="panel camera-panel" aria-labelledby="reference-title">
+      <section className="panel camera-panel studio-reference-panel" aria-labelledby="reference-title">
         <div className="panel-heading">
           <h2 id="reference-title">คลิปตัวอย่าง</h2>
           {videoUrl && <span className="camera-badge">เล่นวนซ้ำ</span>}
@@ -61,7 +61,7 @@ export function Studio({ catalog }: { catalog: ReturnType<typeof useExercises> }
           </div>}
         {exercise?.camera_view && <p className="studio-media-note">มุมกล้องที่แนะนำ · {exercise.camera_view}</p>}
       </section>
-      <section className="panel camera-panel" aria-labelledby="camera-title">
+      <section className="panel camera-panel studio-camera-panel" aria-labelledby="camera-title">
         <div className="panel-heading">
           <h2 id="camera-title">ภาพจากกล้อง</h2>
           <span className={preview ? 'camera-badge camera-badge-live' : 'camera-badge'}>
@@ -78,8 +78,6 @@ export function Studio({ catalog }: { catalog: ReturnType<typeof useExercises> }
           </div>}
         </div>
         <div className="camera-actions">
-          {camera.enabled ? <Button variant="outline" onClick={camera.stop}><VideoOff size={17} />ปิดกล้อง</Button>
-            : <Button onClick={camera.start}><Camera size={17} />เปิดกล้อง</Button>}
           {camera.devices.length > 1 && <label className="camera-select">
             <span>กล้อง</span>
             <select value={camera.deviceId} onChange={(event) => camera.selectDevice(event.target.value)}>
@@ -89,31 +87,33 @@ export function Studio({ catalog }: { catalog: ReturnType<typeof useExercises> }
               </option>)}
             </select>
           </label>}
+          {camera.enabled ? <Button variant="outline" onClick={camera.stop}><VideoOff size={17} />ปิดกล้อง</Button>
+            : <Button onClick={camera.start}><Camera size={17} />เปิดกล้อง</Button>}
         </div>
         {camera.error && <p className="notice notice-error" role="alert">{camera.error}</p>}
       </section>
+      <aside className="studio-aside" aria-label="สถานะและการจัดตำแหน่งกล้อง">
+        <section className="panel studio-info" aria-labelledby="framing-title">
+          <span className="tile"><Focus size={17} aria-hidden="true" /></span>
+          <div>
+            <h2 id="framing-title">จัดตำแหน่งกล้อง</h2>
+            <p>วางกล้องให้มั่นคง ใช้พื้นที่ที่มีแสงพอและให้เห็นร่างกายเต็มกรอบ</p>
+          </div>
+        </section>
+        <section className="panel studio-info" aria-labelledby="pose-title">
+          <span className="tile tile-mint"><ScanLine size={17} aria-hidden="true" /></span>
+          <div>
+            <h2 id="pose-title">สถานะการตรวจจับ</h2>
+            <p role="status">{message}</p>
+            <p className="studio-score-note">
+              <span>จำนวนครั้งและคะแนน</span>
+              <strong>รอกำหนดท่าและเกณฑ์</strong>
+            </p>
+          </div>
+        </section>
+        <p className="privacy-note"><ShieldCheck size={17} />ภาพจากกล้องประมวลผลบนอุปกรณ์ของคุณ</p>
+      </aside>
     </div>
-    <aside className="studio-aside" aria-label="สถานะและการจัดตำแหน่งกล้อง">
-      <section className="panel studio-info" aria-labelledby="pose-title">
-        <span className="tile tile-mint"><ScanLine size={17} aria-hidden="true" /></span>
-        <div>
-          <h2 id="pose-title">สถานะการตรวจจับ</h2>
-          <p role="status">{message}</p>
-          <p className="studio-score-note">
-            <span>จำนวนครั้งและคะแนน</span>
-            <strong>รอกำหนดท่าและเกณฑ์</strong>
-          </p>
-        </div>
-      </section>
-      <section className="panel studio-info" aria-labelledby="framing-title">
-        <span className="tile"><Focus size={17} aria-hidden="true" /></span>
-        <div>
-          <h2 id="framing-title">จัดตำแหน่งกล้อง</h2>
-          <p>วางกล้องให้มั่นคง ใช้พื้นที่ที่มีแสงพอและให้เห็นร่างกายเต็มกรอบ</p>
-        </div>
-      </section>
-      <p className="privacy-note"><ShieldCheck size={17} />ภาพจากกล้องประมวลผลบนอุปกรณ์ของคุณ</p>
-    </aside>
   </>
 }
 
