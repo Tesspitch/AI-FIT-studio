@@ -327,6 +327,8 @@ input, select { min-height: 38px; border: 1px solid #e2d8f1; border-radius: 9px;
 .auth-page[data-mode="register"] :is(.account-form input, .auth-google) { border-color: #c9e4d8; }
 .auth-card .account-form { gap: 14px; margin: 0; }
 .auth-card .account-form label { gap: 6px; }
+.auth-card .account-form small, .auth-username-note { color: var(--muted-foreground); font-size: .8rem; }
+.auth-card .auth-method-toggle { margin: 6px auto 0; display: flex; }
 .auth-card .account-form input { width: 100%; min-height: 45px; padding-inline: 12px; font-size: 1rem; font-weight: 500; }
 .auth-card .account-form .button, .auth-google { width: 100%; min-height: 45px; }
 .auth-card .account-form .button { margin-top: 3px; }

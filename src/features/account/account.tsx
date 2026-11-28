@@ -1,4 +1,4 @@
-import { isAuthError, type Session, type User } from '@supabase/supabase-js'
+import { FunctionsHttpError, isAuthError, type Session, type User } from '@supabase/supabase-js'
 import { Activity, CalendarDays, ChevronRight, Dumbbell, LogIn, LogOut, Pencil, Repeat2, UserRound, UserRoundPlus } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button'
 import { BackButton } from '../../components/ui/back-button'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { isGoogleSignInEnabled, supabase } from '../../lib/supabase'
+import { isInternalAddress, normalizeUsername, usernameLoginAddress, usernamePattern } from './username'
 import {
   buildHistoryRows, exerciseName, historySortOptions, orderHistoryRows, parseHistorySort,
   type HistorySession, type HistorySort,
@@ -110,17 +111,42 @@ export function SignOutButton({ className }: { className: string }) {
 }
 
 export function SignIn({ register, onModeChange }: { register: boolean; onModeChange: (register: boolean) => void }) {
-  const [pending, setPending] = useState<'email' | 'google' | null>(null)
+  const [pending, setPending] = useState<'password' | 'google' | null>(null)
   const [message, setMessage] = useState(getAuthReturnMessage)
+  const [registerByEmail, setRegisterByEmail] = useState(false)
+  const usernameSignup = register && !registerByEmail
+  const emailSignup = register && registerByEmail
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (pending) return
     const data = new FormData(event.currentTarget)
-    const credentials = { email: String(data.get('email')).trim(), password: String(data.get('password')) }
-    setPending('email')
+    const identifier = String(data.get('identifier') ?? '').trim()
+    const password = String(data.get('password') ?? '')
+    const useEmail = emailSignup || (!register && identifier.includes('@'))
+    const username = useEmail ? null : normalizeUsername(identifier)
+    if ((!useEmail && !username) || (useEmail && isInternalAddress(identifier))) {
+      setMessage(register ? 'กรุณาตรวจรูปแบบชื่อผู้ใช้หรืออีเมล' : 'เข้าสู่ระบบไม่สำเร็จ โปรดตรวจชื่อผู้ใช้ อีเมล และรหัสผ่าน')
+      return
+    }
+    if (usernameSignup && new TextEncoder().encode(password).length > 72) {
+      setMessage('รหัสผ่านยาวเกินไป กรุณาใช้รหัสผ่านที่สั้นลง')
+      return
+    }
+    const credentials = { email: username ? usernameLoginAddress(username) : identifier, password }
+    setPending('password')
     setMessage('')
     try {
-      const result = register ? await supabase!.auth.signUp({
+      if (usernameSignup) {
+        const { error } = await supabase!.functions.invoke('register-username', { body: { username, password } })
+        if (error) throw error
+        const result = await supabase!.auth.signInWithPassword(credentials).catch(() => null)
+        if (!result?.data.session) {
+          onModeChange(false)
+          setMessage('สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านที่ตั้งไว้')
+        }
+        return
+      }
+      const result = emailSignup ? await supabase!.auth.signUp({
         ...credentials,
         options: { emailRedirectTo: accountReturnUrl() },
       })
@@ -128,6 +154,21 @@ export function SignIn({ register, onModeChange }: { register: boolean; onModeCh
       if (result.error) throw result.error
       if (!result.data.session) setMessage('ตรวจอีเมลเพื่อยืนยันบัญชีแล้วกลับมาเข้าสู่ระบบ')
     } catch (error) {
+      if (error instanceof FunctionsHttpError) {
+        const response: Response = error.context
+        if (response.status === 409) {
+          setMessage('ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น')
+          return
+        }
+        if (response.status === 429) {
+          setMessage('มีคำขอมากเกินไป กรุณารอสักครู่แล้วลองอีกครั้ง')
+          return
+        }
+        if (response.status === 404 || response.status === 503) {
+          setMessage('ระบบสมัครด้วยชื่อผู้ใช้ยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง')
+          return
+        }
+      }
       if (isAuthError(error)) {
         if (error.code === 'over_email_send_rate_limit') {
           setMessage('ระบบส่งอีเมลยืนยันถึงขีดจำกัดแล้ว กรุณารอแล้วลองใหม่ หรือดำเนินการต่อด้วย Google')
@@ -146,8 +187,9 @@ export function SignIn({ register, onModeChange }: { register: boolean; onModeCh
           return
         }
       }
-      setMessage(register ? 'สมัครสมาชิกไม่สำเร็จ โปรดตรวจข้อมูลแล้วลองอีกครั้ง'
-        : 'เข้าสู่ระบบไม่สำเร็จ โปรดตรวจอีเมลและรหัสผ่านแล้วลองอีกครั้ง')
+      setMessage(usernameSignup ? 'สมัครด้วยชื่อผู้ใช้ไม่สำเร็จ กรุณาตรวจข้อมูลหรือลองใหม่อีกครั้ง'
+        : register ? 'สมัครสมาชิกไม่สำเร็จ โปรดตรวจข้อมูลแล้วลองอีกครั้ง'
+        : 'เข้าสู่ระบบไม่สำเร็จ โปรดตรวจชื่อผู้ใช้ อีเมล และรหัสผ่าน')
     } finally {
       setPending(null)
     }
@@ -159,7 +201,7 @@ export function SignIn({ register, onModeChange }: { register: boolean; onModeCh
     setMessage('')
     try {
       if (!await isGoogleSignInEnabled()) {
-        setMessage('Google ยังไม่พร้อมใช้งานในขณะนี้ คุณสามารถเข้าสู่ระบบด้วยอีเมลได้')
+        setMessage('Google ยังไม่พร้อมใช้งานในขณะนี้ กรุณาใช้ชื่อผู้ใช้หรืออีเมล')
         return
       }
       const { error } = await supabase!.auth.signInWithOAuth({
@@ -181,6 +223,7 @@ export function SignIn({ register, onModeChange }: { register: boolean; onModeCh
     {register && <div className="auth-back">
       <BackButton label="กลับไปเข้าสู่ระบบ" disabled={pending !== null} onClick={() => {
         onModeChange(false)
+        setRegisterByEmail(false)
         setMessage('')
       }} />
     </div>}
@@ -193,12 +236,26 @@ export function SignIn({ register, onModeChange }: { register: boolean; onModeCh
         <p className="auth-caption">{register ? 'สร้างบัญชีเพื่อเริ่มฝึกกับ Office Reset' : 'เข้าสู่ Office Reset เพื่อเริ่มฝึก'}</p>
       </div>
     </div>
-    <form className="account-form" onSubmit={submit}>
-      <label>อีเมล<input name="email" type="email" autoComplete="email" placeholder="name@example.com" required /></label>
-      <label>รหัสผ่าน<input name="password" type="password" placeholder={register ? 'อย่างน้อย 6 ตัวอักษร' : undefined} minLength={register ? 6 : undefined}
+    <form key={usernameSignup ? 'username' : emailSignup ? 'email' : 'sign-in'} className="account-form" onSubmit={submit}>
+      <label>{usernameSignup ? 'ชื่อผู้ใช้' : emailSignup ? 'อีเมล' : 'ชื่อผู้ใช้หรืออีเมล'}
+        <input name="identifier" type={emailSignup ? 'email' : 'text'}
+          autoComplete={emailSignup ? 'email' : 'username'} autoCapitalize="none" spellCheck={false}
+          placeholder={usernameSignup ? 'เช่น office_fit' : emailSignup ? 'name@example.com' : undefined}
+          pattern={usernameSignup ? usernamePattern : undefined} maxLength={usernameSignup ? 24 : undefined}
+          aria-describedby={usernameSignup ? 'signup-username-hint' : undefined} required />
+        {usernameSignup && <small id="signup-username-hint">ใช้ตัวอักษรอังกฤษ ตัวเลข หรือ _ จำนวน 3–24 ตัว</small>}
+      </label>
+      <label>รหัสผ่าน<input name="password" type="password"
+        placeholder={usernameSignup ? 'อย่างน้อย 8 ตัวอักษร' : emailSignup ? 'อย่างน้อย 6 ตัวอักษร' : undefined}
+        minLength={usernameSignup ? 8 : emailSignup ? 6 : undefined}
         autoComplete={register ? 'new-password' : 'current-password'} required /></label>
-      <Button type="submit" disabled={pending !== null}>{pending === 'email' ? 'กำลังดำเนินการ' : register ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ'}</Button>
+      {usernameSignup && <p className="auth-username-note">บัญชีที่ไม่มีอีเมลจะรีเซ็ตรหัสผ่านทางอีเมลไม่ได้</p>}
+      <Button type="submit" disabled={pending !== null}>{pending === 'password' ? 'กำลังดำเนินการ' : register ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ'}</Button>
     </form>
+    {register && <Button variant="ghost" className="auth-method-toggle" disabled={pending !== null} onClick={() => {
+      setRegisterByEmail(!registerByEmail)
+      setMessage('')
+    }}>{registerByEmail ? 'สมัครด้วยชื่อผู้ใช้' : 'สมัครด้วยอีเมล'}</Button>}
     <div className="auth-divider">หรือ</div>
     <Button className="auth-google" variant="outline" disabled={pending !== null} onClick={() => void signInWithGoogle()}>
       <img className="auth-google-logo" src={googleLogo} alt="" width={18} height={18} />
@@ -325,6 +382,8 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
   const previousExperience = experience && !experienceLabel ? experience : null
   const providerName = [user.user_metadata.full_name, user.user_metadata.name]
     .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+  const username = typeof user.app_metadata.office_reset_username === 'string'
+    ? normalizeUsername(user.app_metadata.office_reset_username) : null
   const details = profile ? [
     { label: 'ชื่อที่แสดง', value: profile.display_name },
     { label: 'อายุ', value: profile.age === null ? null : `${profile.age} ปี` },
@@ -338,8 +397,9 @@ function Profile({ user, profileState }: { user: User; profileState: ReturnType<
       <div className="profile-identity">
         <AccountAvatar user={user} size="profile" />
         <div>
-          <h2 id="profile-details">{profile?.display_name || providerName || 'ข้อมูลบัญชี'}</h2>
-          {user.email && <p className="profile-email">{user.email}</p>}
+          <h2 id="profile-details">{profile?.display_name || providerName || username || 'ข้อมูลบัญชี'}</h2>
+          {username ? <p className="profile-email">ชื่อผู้ใช้ {username}</p>
+            : user.email && !isInternalAddress(user.email) && <p className="profile-email">{user.email}</p>}
         </div>
       </div>
       {profile && !editing && <section className="profile-details" aria-labelledby="profile-personal">

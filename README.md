@@ -25,6 +25,8 @@ npm run build
 - เปิด Email และ Google providers ใน Supabase Auth การสมัครด้วยอีเมลและ Google OAuth กลับมาที่หน้าภาพรวม `/` ของเว็บที่เริ่มใช้งาน เพิ่ม URL เต็มใน Redirect URLs เช่น `http://127.0.0.1:5174/`, `http://localhost:5174/` และ URL จริงเมื่อ Deploy
 - ใน Google Auth Platform ใช้ OAuth Client ประเภท Web application และใส่ Callback URL ที่หน้า Google Provider ของ Supabase แสดงใน Authorized redirect URIs กรอก Google Client ID และ Client Secret ใน Supabase Dashboard
 - สำหรับการสมัครด้วยอีเมลของผู้ใช้ทั่วไป ให้ตั้ง [Custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp) ใน Supabase Auth บริการส่งอีเมลเริ่มต้นมีข้อจำกัดผู้รับและโควตาส่งอีเมลยืนยันระดับโปรเจกต์
+- การสมัครด้วยชื่อผู้ใช้ต้องใช้ migration `20261128000000_username_signup.sql` ก่อน deploy Edge Function `register-username` ด้วย Supabase CLI (`supabase functions deploy register-username --project-ref <project-ref>`) สำหรับการ deploy ผ่าน Dashboard ให้อัปโหลด `supabase/functions/register-username/index.ts` และปิดการตรวจ JWT ที่ gateway เฉพาะฟังก์ชันนี้ เพราะผู้สมัครยังไม่มี session ฟังก์ชันจำกัดคำขอและใช้ `SUPABASE_SERVICE_ROLE_KEY` ที่ Supabase จัดให้ใน Edge Functions เก็บคีย์นี้ฝั่งเซิร์ฟเวอร์เท่านั้น
+- บัญชีชื่อผู้ใช้เข้าสู่ระบบด้วยชื่อผู้ใช้และรหัสผ่านโดยไม่ต้องยืนยันอีเมล และใช้การกู้รหัสผ่านทางอีเมลไม่ได้
 
 รายชื่อท่า กฎนับ Rep สมการให้คะแนน และคลิปอยู่ระหว่างกำหนด ห้องฝึกใช้ทดสอบกล้องและการตรวจจับได้ทันที ประวัติอ่านผลที่มีอยู่จาก Supabase เมื่อเชื่อมต่อ งานบันทึกผลการฝึกจะเชื่อมกับกฎที่ยืนยันแล้วตาม [requirement.md](./requirement.md)
 
