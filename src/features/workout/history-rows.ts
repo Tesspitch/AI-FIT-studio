@@ -1,18 +1,71 @@
+import { maneevejScoringVersion } from '../pose/maneevej-session'
+
 export type HistorySession = {
   id: string
   started_at: string
   total_reps: number
   overall_score: number | null
+  ended_at?: string | null
+  scoring_version?: string | null
   workout_exercises: {
     id: string
     exercise_id: string
     total_reps: number
+    overall_score?: number | null
+    evaluation_config_snapshot?: unknown
     exercises: { name: string } | { name: string }[] | null
     rep_evaluations: { rep_number: number; form_score: number; feedback: unknown }[]
   }[]
 }
 
 type HistoryRow = { exerciseId: string; exerciseLabel: string; name: string; reps: number; session: HistorySession }
+const maneevejGroupId = 'maneevej'
+const maneevejGroupName = 'ชุดบริหารมณีเวช'
+
+export function isManeevejSession(session: HistorySession) {
+  return session.scoring_version === maneevejScoringVersion || session.scoring_version === 'maneevej-completion-v1'
+}
+
+function exerciseMetric(entry: HistorySession['workout_exercises'][number], key: string) {
+  const config = entry.evaluation_config_snapshot
+  const value = config && typeof config === 'object' && key in config ? config[key as keyof typeof config] : null
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+export function exerciseDurationMs(entry: HistorySession['workout_exercises'][number]) {
+  return exerciseMetric(entry, 'duration_ms')
+}
+
+export function orderedRoutineExercises(session: HistorySession) {
+  return session.workout_exercises.slice().sort((a, b) =>
+    (exerciseMetric(a, 'position') ?? Infinity) - (exerciseMetric(b, 'position') ?? Infinity))
+}
+
+export function historyDurationMs(session: HistorySession) {
+  if (isManeevejSession(session)) {
+    const durations = session.workout_exercises.map(exerciseDurationMs)
+    return durations.length > 0 && durations.every((duration) => duration !== null)
+      ? durations.reduce((sum, duration) => sum + duration, 0) : null
+  }
+  const duration = session.ended_at ? Date.parse(session.ended_at) - Date.parse(session.started_at) : NaN
+  return Number.isFinite(duration) && duration >= 0 ? duration : null
+}
+
+export function matchesHistoryExercise(row: HistoryRow, exerciseId: string) {
+  return row.exerciseId === exerciseId || (isManeevejSession(row.session) &&
+    row.session.workout_exercises.some((entry) => entry.exercise_id === exerciseId))
+}
+
+export function historyFilterOptions(rows: HistoryRow[]) {
+  const options = new Map<string, string>()
+  for (const row of rows) {
+    options.set(row.exerciseId, row.exerciseLabel)
+    if (isManeevejSession(row.session)) {
+      for (const entry of orderedRoutineExercises(row.session)) options.set(entry.exercise_id, exerciseName(entry))
+    }
+  }
+  return options
+}
 
 export const historySortOptions = [
   { value: 'recent', label: 'ล่าสุดก่อน' },
@@ -52,7 +105,11 @@ export function buildHistoryRows(newestFirst: HistorySession[]) {
 
   for (const session of newestFirst.slice().reverse()) {
     const sessionRows = new Map<string, HistoryRow>()
-    for (const entry of session.workout_exercises) {
+    if (isManeevejSession(session)) sessionRows.set(maneevejGroupId, {
+      exerciseId: maneevejGroupId, exerciseLabel: maneevejGroupName,
+      name: maneevejGroupName, reps: session.total_reps, session,
+    })
+    for (const entry of isManeevejSession(session) ? [] : session.workout_exercises) {
       const previous = sessionRows.get(entry.exercise_id)
       const reps = (previous?.reps ?? 0) + entry.total_reps
       const name = exerciseName(entry)

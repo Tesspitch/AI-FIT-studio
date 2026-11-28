@@ -1,4 +1,4 @@
-import { Camera, ChevronDown, ChevronRight, Clapperboard, Dumbbell, Focus, ScanLine, ShieldCheck, VideoOff } from 'lucide-react'
+import { Camera, ChevronDown, ChevronRight, Clapperboard, Dumbbell, Focus, Layers, ScanLine, ShieldCheck, VideoOff } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -9,6 +9,9 @@ import { referenceVideoUrl } from '../../lib/supabase'
 import type { Exercise, useExercises } from '../exercises/use-exercises'
 import { saveDemoWorkout, type CompletedDemoWorkout, type DemoWorkout } from '../workout/save-demo-workout'
 import { initialShoulderRaise, measureShoulderRaise, shoulderRaiseDemo, updateShoulderRaise } from './shoulder-raise'
+import { ManeevejRoutine } from './maneevej-routine'
+import { maneevejSetUrl } from './maneevej'
+import { ReferencePreview } from './reference-preview'
 import { useCamera } from './use-camera'
 
 const shoulderRaisePrompt = {
@@ -23,6 +26,7 @@ type WorkoutStatus =
 
 export function Studio({ catalog }: { catalog: ReturnType<typeof useExercises> }) {
   const [params] = useSearchParams()
+  if (params.get('routine') === 'maneevej') return <ManeevejRoutine />
   const selectedId = params.get('exercise')
   const isDemo = selectedId === shoulderRaiseDemo.id
   const exercise = catalog.exercises.find(({ id }) => id === selectedId)
@@ -43,6 +47,13 @@ function ExercisePicker({ catalog, hasInvalidSelection }: {
     <section className="panel status-panel" aria-labelledby="studio-picker-title">
       <h2 id="studio-picker-title">รายการท่า</h2>
       <ul className="exercise-list studio-choice-list">
+        <li>
+          <Link to={maneevejSetUrl}>
+            <Layers size={19} aria-hidden="true" />
+            <span><strong>ชุดบริหารมณีเวช</strong><small>ฝึกต่อเนื่อง 5 ท่า พร้อมช่วงพักระหว่างท่า</small></span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </Link>
+        </li>
         <li>
           <Link to={`?exercise=${shoulderRaiseDemo.id}`} data-quick-tip-target="choose-exercise">
             <Dumbbell size={19} aria-hidden="true" />
@@ -300,16 +311,4 @@ function StudioWorkout({ catalog, exercise, isDemo }: {
       </aside>
     </div>
   </>
-}
-
-function ReferencePreview({ src, exerciseName }: { src: string; exerciseName: string }) {
-  const [failed, setFailed] = useState(false)
-
-  return <div className={failed ? 'studio-media-frame' : 'studio-media-frame reference-frame'}>
-    {failed ? <div className="camera-placeholder">
-      <p role="alert">โหลดคลิปตัวอย่างไม่สำเร็จ</p>
-      <Button variant="outline" onClick={() => setFailed(false)}>ลองโหลดคลิปอีกครั้ง</Button>
-    </div> : <video src={src} aria-label={`คลิปตัวอย่าง ${exerciseName}`} muted autoPlay loop playsInline controls
-      onError={() => setFailed(true)} />}
-  </div>
 }

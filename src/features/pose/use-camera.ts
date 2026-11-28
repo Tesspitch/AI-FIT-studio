@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PoseLandmarkerResult } from '@mediapipe/tasks-vision'
 import { assessPose, type PoseQuality } from './quality'
 import { createPoseRuntime, drawPose } from './runtime'
@@ -27,6 +27,7 @@ export function useCamera(onPose?: PoseListener) {
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [quality, setQuality] = useState<PoseQuality>('missing')
   const [error, setError] = useState('')
+  const startCamera = useCallback(() => setEnabled(true), [])
 
   useEffect(() => {
     poseListener.current = onPose
@@ -139,7 +140,7 @@ export function useCamera(onPose?: PoseListener) {
       poseListener.current?.(null, performance.now())
       setDeviceId(id)
     },
-    start: () => setEnabled(true),
+    start: startCamera,
     stop: () => {
       poseListener.current?.(null, performance.now())
       setEnabled(false)

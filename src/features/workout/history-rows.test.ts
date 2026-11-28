@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildHistoryRows, orderHistoryRows, parseHistorySort, type HistorySession } from './history-rows'
+import { buildHistoryRows, historyDurationMs, historyFilterOptions, matchesHistoryExercise, orderHistoryRows, parseHistorySort, type HistorySession } from './history-rows'
 
 function session(id: string, day: number, hour: number, ...exerciseIds: string[]): HistorySession {
   return {
@@ -18,6 +18,19 @@ function session(id: string, day: number, hour: number, ...exerciseIds: string[]
 }
 
 describe('exercise history rows', () => {
+  it('keeps a routine grouped and uses active time while filtering by its exercises', () => {
+    const completed = session('routine', 26, 15, 'สวัสดี', 'กรรเชียง')
+    completed.scoring_version = 'maneevej-completion-v1'
+    completed.ended_at = new Date(2026, 10, 26, 15, 10).toISOString()
+    completed.workout_exercises[0].evaluation_config_snapshot = { duration_ms: 50000, position: 1 }
+    completed.workout_exercises[1].evaluation_config_snapshot = { duration_ms: 54000, position: 2 }
+    const rows = buildHistoryRows([completed])
+    expect(rows.map(({ name }) => name)).toEqual(['ชุดบริหารมณีเวช'])
+    expect(matchesHistoryExercise(rows[0], 'กรรเชียง')).toBe(true)
+    expect(matchesHistoryExercise(rows[0], 'ปล่อยพลัง')).toBe(false)
+    expect([...historyFilterOptions(rows).keys()]).toEqual(['maneevej', 'สวัสดี', 'กรรเชียง'])
+    expect(historyDurationMs(completed)).toBe(104000)
+  })
   it('shows one row per visit, numbering repeats on the same day from the earliest', () => {
     const rows = buildHistoryRows([
       session('d', 26, 0, 'ยกแขน'),

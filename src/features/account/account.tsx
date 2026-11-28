@@ -1,5 +1,5 @@
 import { FunctionsHttpError, isAuthError, type Session, type User } from '@supabase/supabase-js'
-import { Activity, CalendarDays, ChevronRight, Dumbbell, LogIn, LogOut, Pencil, Repeat2, UserRound, UserRoundPlus } from 'lucide-react'
+import { Activity, CalendarDays, ChevronRight, Clock3, Dumbbell, LogIn, LogOut, Pencil, Repeat2, UserRound, UserRoundPlus } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import googleLogo from '../../assets/google-g.png'
@@ -8,8 +8,10 @@ import { BackButton } from '../../components/ui/back-button'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { isGoogleSignInEnabled, supabase } from '../../lib/supabase'
 import { isInternalAddress, normalizeUsername, usernameLoginAddress, usernamePattern } from './username'
+import { formatRoutineTime, maneevejScoringVersion } from '../pose/maneevej-session'
 import {
-  buildHistoryRows, exerciseName, historySortOptions, orderHistoryRows, parseHistorySort,
+  buildHistoryRows, exerciseDurationMs, exerciseName, historyDurationMs, historyFilterOptions, historySortOptions,
+  isManeevejSession, matchesHistoryExercise, orderedRoutineExercises, orderHistoryRows, parseHistorySort,
   type HistorySession, type HistorySort,
 } from '../workout/history-rows'
 
@@ -549,7 +551,7 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
   useEffect(() => {
     const controller = new AbortController()
     void supabase!.from('workout_sessions')
-      .select('id, started_at, total_reps, overall_score, workout_exercises(id, exercise_id, total_reps, exercises(name), rep_evaluations(rep_number, form_score, feedback))')
+      .select('id, started_at, ended_at, scoring_version, total_reps, overall_score, workout_exercises(id, exercise_id, total_reps, overall_score, evaluation_config_snapshot, exercises(name), rep_evaluations(rep_number, form_score, feedback))')
       .eq('user_id', userId).order('started_at', { ascending: false }).order('id', { ascending: false })
       .abortSignal(controller.signal).then(({ data, error }) => {
         if (controller.signal.aborted) return
@@ -567,7 +569,7 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
   </p>
 
   const rows = buildHistoryRows(sessions)
-  const visibleRows = selectedExerciseId ? rows.filter(({ exerciseId }) => exerciseId === selectedExerciseId) : rows
+  const visibleRows = selectedExerciseId ? rows.filter((row) => matchesHistoryExercise(row, selectedExerciseId)) : rows
   const selectedRow = selectedId ? visibleRows.find(({ session }) => session.id === selectedId) : undefined
   const selected = selectedExerciseId ? selectedRow?.session : sessions.find(({ id }) => id === selectedId)
   if (selectedId && !selected) return <section className="panel status-panel">
@@ -575,10 +577,13 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
   </section>
 
   if (selected) {
-    const entries = selected.workout_exercises.filter((entry) => !selectedExerciseId || entry.exercise_id === selectedExerciseId)
+    const routine = isManeevejSession(selected)
+    const entries = routine ? orderedRoutineExercises(selected)
+      : selected.workout_exercises.filter((entry) => !selectedExerciseId || entry.exercise_id === selectedExerciseId)
     const dateLabel = dateFormat.format(new Date(selected.started_at))
-    const title = (selectedExerciseId || entries.length === 1 ? selectedRow?.name : null) ?? 'ผลการฝึก'
+    const title = (routine || selectedExerciseId || entries.length === 1 ? selectedRow?.name : null) ?? 'ผลการฝึก'
     const score = selected.overall_score
+    const durationMs = historyDurationMs(selected)
     return <div className="history-detail" key={`${selected.id}/${selectedExerciseId ?? ''}`}>
       <section className="panel history-summary" aria-labelledby="history-session-title">
         <div>
@@ -588,20 +593,35 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
           </p>
         </div>
         <dl className="history-summary-metrics">
-          <div><dt><Activity size={15} aria-hidden="true" />คะแนนรวม</dt>
-            <dd>{score === null ? '—' : <>{historyScoreFormat.format(score)} <small>pt</small></>}</dd></div>
+          <div><dt><Activity size={15} aria-hidden="true" />{selected.scoring_version === maneevejScoringVersion
+            ? 'คะแนนคุณภาพท่าเฉลี่ย' : routine ? 'คะแนนทำครบรอบเฉลี่ย' : 'คะแนนรวม'}</dt>
+            <dd>{score === null ? '—' : <>{historyScoreFormat.format(score)}<small>{routine ? '%' : ' pt'}</small></>}</dd></div>
+          <div><dt><Clock3 size={15} aria-hidden="true" />เวลาฝึก</dt>
+            <dd>{durationMs === null ? '—' : formatRoutineTime(durationMs)}</dd></div>
           <div><dt><Repeat2 size={15} aria-hidden="true" />จำนวนรอบ</dt>
             <dd>{selectedExerciseId ? selectedRow?.reps : selected.total_reps} <small>รอบ</small></dd></div>
         </dl>
       </section>
-      <section className="panel history-breakdown" aria-labelledby="history-breakdown-title">
+      {routine ? <section className="panel history-breakdown history-routine-breakdown" aria-labelledby="history-breakdown-title">
+        <h3 id="history-breakdown-title">คะแนนเฉลี่ยรายท่า</h3>
+        <ul>
+          {entries.map((entry) => {
+            const elapsed = exerciseDurationMs(entry)
+            return <li key={entry.id}>
+              <span><strong>{exerciseName(entry)}</strong>
+                {elapsed !== null && <small>เวลาฝึก {formatRoutineTime(elapsed)}</small>}</span>
+              <strong>{entry.overall_score == null ? 'ประเมินไม่ได้' : `${historyScoreFormat.format(entry.overall_score)}%`}</strong>
+            </li>
+          })}
+        </ul>
+      </section> : <section className="panel history-breakdown" aria-labelledby="history-breakdown-title">
         <h3 id="history-breakdown-title">คะแนนรายรอบ</h3>
         {entries.length === 0 && <p className="history-empty-note">ไม่มีข้อมูลคะแนนรายรอบ</p>}
         {entries.map((entry) => <div className="history-rep-group" key={entry.id}>
           {(!selectedExerciseId || entries.length > 1) && <h4>{exerciseName(entry)}</h4>}
           <WorkoutRepScores entry={entry} />
         </div>)}
-      </section>
+      </section>}
     </div>
   }
 
@@ -609,10 +629,10 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
     <h2 tabIndex={-1} data-quick-tip-target="history-empty">ยังไม่มีประวัติการฝึก</h2>
   </section>
 
-  const exerciseOptions = new Map(rows.map(({ exerciseId, exerciseLabel }) => [exerciseId, exerciseLabel]))
+  const exerciseOptions = historyFilterOptions(rows)
   const orderedRows = orderHistoryRows(visibleRows, sort)
 
-  function workoutDetailsUrl(exerciseId: string, sessionId: string) {
+  function workoutDetailsUrl(exerciseId: string | null, sessionId: string) {
     const search = historyArchiveParams(exerciseId, sort)
     search.set('session', sessionId)
     if (selectedExerciseId) search.set('filter', selectedExerciseId)
@@ -639,19 +659,24 @@ function HistoryResults({ userId, selectedExerciseId, selectedId, sort, onArchiv
       </div>
     </div>
     {orderedRows.length ? <ul className="history-list">
-      {orderedRows.map(({ exerciseId, name, reps, session }, index) => <li key={`${session.id}/${exerciseId}`}>
-        <Link to={workoutDetailsUrl(exerciseId, session.id)}
+      {orderedRows.map(({ exerciseId, name, reps, session }, index) => {
+        const routine = isManeevejSession(session)
+        const durationMs = historyDurationMs(session)
+        return <li key={`${session.id}/${exerciseId}`}>
+        <Link to={workoutDetailsUrl(routine ? null : exerciseId, session.id)}
           className="panel history-row" data-quick-tip-target={index === 0 ? 'choose-history' : undefined}>
           <span className="tile" aria-hidden="true"><Dumbbell size={19} /></span>
           <span className="history-row-name"><strong>{name}</strong>
             <time dateTime={session.started_at}>{dateFormat.format(new Date(session.started_at))}</time></span>
-          <span className="history-row-reps">{reps} รอบ</span>
-          <span className="history-row-score" aria-label={session.overall_score === null ? 'ยังไม่มีคะแนนรวม' : `คะแนนรวม ${session.overall_score} คะแนน`}>
-            {session.overall_score === null ? '—' : <>{historyScoreFormat.format(session.overall_score)} <small>pt</small></>}
+          <span className="history-row-reps">{reps} รอบ{durationMs !== null && <small>เวลาฝึก {formatRoutineTime(durationMs)}</small>}</span>
+          <span className="history-row-score">
+            {routine && <small className="history-score-label">เฉลี่ยทั้งชุด</small>}
+            {session.overall_score === null ? <span aria-label="ยังไม่มีคะแนน">—</span>
+              : <>{historyScoreFormat.format(session.overall_score)}<small>{routine ? '%' : ' pt'}</small></>}
           </span>
           <ChevronRight className="history-row-arrow" size={17} aria-hidden="true" />
         </Link>
-      </li>)}
+      </li>})}
     </ul> : <p className="panel status-panel" role="status">ไม่พบรายการฝึกของท่าที่เลือก</p>}
   </section>
 }

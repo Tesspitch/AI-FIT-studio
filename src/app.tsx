@@ -1,6 +1,6 @@
 import {
   CalendarDays, Camera, ChevronRight, CircleHelp, ClipboardList,
-  Droplets, Dumbbell, Focus, House, PanelLeftClose, PanelLeftOpen, ShieldCheck,
+  Droplets, Dumbbell, Focus, House, Layers, PanelLeftClose, PanelLeftOpen, ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
@@ -9,8 +9,10 @@ import { BackButton } from './components/ui/back-button'
 import { useExercises } from './features/exercises/use-exercises'
 import { Account, AccountAvatar, History, SignIn, SignOutButton, useAccount, useProfile } from './features/account/account'
 import { QuickTips, useQuickTips } from './features/onboarding/quick-tips'
+import { ScreeningGate } from './features/onboarding/screening-gate'
 import { Studio } from './features/pose/studio'
 import { shoulderRaiseDemo } from './features/pose/shoulder-raise'
+import { maneevejSetUrl } from './features/pose/maneevej'
 import { WorkoutOverview } from './features/workout/workout-overview'
 import { referenceVideoUrl, supabase } from './lib/supabase'
 import hero from './assets/studio-hero.png'
@@ -40,7 +42,9 @@ export function App() {
     }
     return <Navigate to="/" replace />
   }
-  return <Workspace key={user.id} pathname={pathname} user={user} />
+  return <ScreeningGate key={user.id} userId={user.id} brand={<Brand />}>
+    <Workspace pathname={pathname} user={user} />
+  </ScreeningGate>
 }
 
 function Brand() {
@@ -175,6 +179,11 @@ function Dashboard({ catalog, userId, onShowTips }: {
       <section className="panel catalog-panel">
         <h2>รายการท่า</h2>
         <ul className="exercise-list">
+          <li>
+            <Link to={maneevejSetUrl}>
+              <Layers size={17} aria-hidden="true" />ชุดบริหารมณีเวช 5 ท่า<ChevronRight size={16} aria-hidden="true" />
+            </Link>
+          </li>
           <li>
             <Link to={`/studio?exercise=${shoulderRaiseDemo.id}`}>
               <Dumbbell size={17} aria-hidden="true" />{shoulderRaiseDemo.name} (ทดลอง)<ChevronRight size={16} aria-hidden="true" />
